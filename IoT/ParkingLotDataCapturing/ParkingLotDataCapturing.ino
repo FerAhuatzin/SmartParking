@@ -29,7 +29,7 @@
 #define ECHO_PIN_3 23
 
 // Umbral de distancia para considerar ocupado un lugar (en cm)
-#define THRESHOLD_DISTANCE 5
+#define THRESHOLD_DISTANCE 14
 
 // Variables para Firebase
 FirebaseData fbdo;
@@ -38,7 +38,7 @@ FirebaseConfig config;
 
 // Variables para el control de tiempo
 unsigned long lastUploadTime = 0;
-const unsigned long uploadInterval = 3000; // Intervalo para subir datos (1 segundos)
+const unsigned long uploadInterval = 1000; // Intervalo para subir datos (2 segundos)
 unsigned long lastHistoricalUpdate = 0;
 const unsigned long historicalInterval = 60000; // Actualizar historial cada minuto (60000 ms)
 
@@ -46,6 +46,8 @@ const unsigned long historicalInterval = 60000; // Actualizar historial cada min
 bool espacio1Ocupado = false;
 bool espacio2Ocupado = false;
 bool espacio3Ocupado = false;
+
+int horaFalsa = 0;
 
 // Variables para estadísticas con medición continua
 unsigned long tiempoOcupado1 = 0;
@@ -81,13 +83,12 @@ String obtenerHoraActual() {
   
   char timeString[9];
   strftime(timeString, sizeof(timeString), "%H:%M:%S", &timeinfo); // Formato hora completa
-  
   return String(timeString);
 }
 
 // Obtener solo la hora (sin minutos ni segundos)
 String obtenerHoraSinMinutos() {
-  struct tm timeinfo;
+  /*struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     Serial.println("Error al obtener la hora");
     return "Error";
@@ -96,6 +97,10 @@ String obtenerHoraSinMinutos() {
   char timeString[9];
   strftime(timeString, sizeof(timeString), "%H:00:00", &timeinfo);
   
+  */
+  char timeString[9];
+  sprintf(timeString, "%02d:00:00", horaFalsa);
+  horaFalsa = (horaFalsa + 1) % 24;
   return String(timeString);
 }
 

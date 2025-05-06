@@ -17,6 +17,14 @@ import { LineChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
 
+// Función de utilidad para evitar valores NaN o Infinity
+const safeNumber = (value: number) => {
+  if (isNaN(value) || !isFinite(value)) {
+    return 0; // O cualquier valor predeterminado adecuado
+  }
+  return value;
+};
+
 export default function HistoricalDataScreen() {
   const [historicalData, setHistoricalData] = useState<any[]>([]);
   const [selectedView, setSelectedView] = useState<"day" | "hour">("day");
@@ -47,39 +55,83 @@ export default function HistoricalDataScreen() {
   useEffect(() => {
     if (historicalData.length > 0) {
       const dailyAverages = historicalData.map((day) => {
-        const dayAverages = Object.values(day.info).map(
-          (hourData: any) => hourData.promedio
+        // Verificamos que day.info sea un objeto y tenga valores
+        if (!day.info || typeof day.info !== 'object') {
+          return 0;
+        }
+        
+        const hourDataArray = Object.values(day.info);
+        if (hourDataArray.length === 0) {
+          return 0;
+        }
+        
+        const validHourData = hourDataArray.filter(
+          (hourData: any) => hourData && typeof hourData.promedio === 'number'
         );
+        
+        if (validHourData.length === 0) {
+          return 0;
+        }
+        
+        const dayAverages = validHourData.map(
+          (hourData: any) => safeNumber(hourData.promedio)
+        );
+        
         const dayAverage =
           dayAverages.reduce((acc: number, curr: number) => acc + curr, 0) /
           dayAverages.length;
-        return dayAverage;
+          
+        return safeNumber(dayAverage);
       });
+      
       setDailyAverage(dailyAverages);
 
-      const lastDay = historicalData[historicalData.length - 1];
-      const hourlyAverages = Object.values(lastDay.info).map(
-        (hourData: any) => hourData.promedio
-      );
-      setHourlyAverage(hourlyAverages);
+      // Procesamiento para datos por hora
+      if (historicalData.length > 0) {
+        const lastDay = historicalData[historicalData.length - 1];
+        if (lastDay && lastDay.info) {
+          const hourlyData = Object.values(lastDay.info || {});
+          
+          const validHourlyData = hourlyData.filter(
+            (hourData: any) => hourData && typeof hourData.promedio === 'number'
+          );
+          
+          const hourlyAverages = validHourlyData.map(
+            (hourData: any) => safeNumber(hourData.promedio)
+          );
+          
+          setHourlyAverage(hourlyAverages);
+        }
+      }
     }
   }, [historicalData]);
 
+  // Limitar etiquetas para evitar sobrecarga visual
+  const getFilteredLabels = (allLabels: any[]) => {
+    if (allLabels.length <= 7) return allLabels;
+    
+    // Para conjuntos más grandes, mostrar solo algunas etiquetas
+    const step = Math.ceil(allLabels.length / 6);
+    return allLabels.filter((_, index) => index % step === 0);
+  };
+
   const dailyData = {
-    labels: historicalData.map((day) => day.dia),
-    datasets: [{ data: dailyAverage, strokeWidth: 2 }],
+    labels: getFilteredLabels(historicalData.map((day) => day.dia)),
+    datasets: [{ data: dailyAverage.length > 0 ? dailyAverage : [0], strokeWidth: 2 }],
   };
 
   const hourlyData = {
-    labels: Object.keys(historicalData[historicalData.length - 1]?.info || {}),
-    datasets: [{ data: hourlyAverage, strokeWidth: 2 }],
+    labels: historicalData.length > 0 ? 
+      getFilteredLabels(Object.keys(historicalData[historicalData.length - 1]?.info || {})) : 
+      ["Sin datos"],
+    datasets: [{ data: hourlyAverage.length > 0 ? hourlyAverage : [0], strokeWidth: 2 }],
   };
 
   const chartConfig = {
     backgroundColor: "#FFFFFF",
     backgroundGradientFrom: "#FFFFFF",
     backgroundGradientTo: "#FFFFFF",
-    decimalPlaces: 2,
+    decimalPlaces: 1, // Reducido para simplificar
     color: (opacity = 1) => `rgba(30, 30, 30, ${opacity})`,
     labelColor: (opacity = 1) => `rgba(30, 30, 30, ${opacity})`,
     strokeWidth: 3,
@@ -89,6 +141,7 @@ export default function HistoricalDataScreen() {
       strokeWidth: "2",
       stroke: "#A1CEDC",
     },
+    formatYLabel: (value: string) => safeNumber(parseFloat(value)).toFixed(1),
   };
 
   return (
@@ -133,14 +186,24 @@ export default function HistoricalDataScreen() {
               ? "Promedio de Ocupación por Día"
               : "Promedio de Ocupación por Hora (Último Día)"}
           </ThemedText>
-          <LineChart
-            data={selectedView === "day" ? dailyData : hourlyData}
-            width={screenWidth - 40}
-            height={300}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chart}
-          />
+          
+          {historicalData.length > 0 ? (
+            <LineChart
+              data={selectedView === "day" ? dailyData : hourlyData}
+              width={screenWidth - 40}
+              height={300}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.chart}
+              withDots={true}
+              withShadow={false}
+              fromZero={true}
+            />
+          ) : (
+            <View style={styles.noDataContainer}>
+              <ThemedText>No hay datos disponibles</ThemedText>
+            </View>
+          )}
         </View>
       </ScrollView>
     </ParallaxScrollView>
@@ -175,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     marginBottom: 30,
-
+    padding: 15,
   },
   chartTitle: {
     marginBottom: 10,
@@ -184,6 +247,7 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 12,
+    marginVertical: 8,
   },
   parkingLotImage: {
     height: 310,
@@ -196,4 +260,9 @@ const styles = StyleSheet.create({
   scrollContainer: {
     paddingBottom: 100,
   },
+  noDataContainer: {
+    height: 300,
+    justifyContent: "center",
+    alignItems: "center",
+  }
 });
